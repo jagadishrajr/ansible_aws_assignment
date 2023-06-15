@@ -1,7 +1,5 @@
 #!/usr/bin/python
 
-# Copyright: (c) 2018, Terry Jones <terry.jones@example.org>
-# GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 from __future__ import (absolute_import, division, print_function)
 __metaclass__ = type
 
@@ -9,99 +7,83 @@ DOCUMENTATION = r'''
 ---
 module: ec2_serial_console
 
-short_description: This is my test module
+short_description: Modify EC2 serial console access for an account
 
 # If this is part of a collection, you need to use semantic versioning,
 # i.e. the version is of the form "2.5.0" and not "2.4".
 version_added: "1.0.0"
 
-description: This is my longer description explaining my test module.
+description: Using this module, you can enable or disable EC2 serial console access. 
 
 options:
-    name:
-        description: This is the message to send to the test module.
+    state:
+        description: The target state of the EC2 serial console access. Must be either of 'enabled' or 'disabled'.
         required: true
         type: str
-    new:
-        description:
-            - Control to demo if the result of this module is changed or not.
-            - Parameter description can be a list as well.
-        required: false
-        type: bool
-# Specify this value according to your collection
-# in format of namespace.collection.doc_fragment_name
+
 extends_documentation_fragment:
-    - my_namespace.my_collection.my_doc_fragment_name
+    - amazon.aws.boto3
+    - amazon.aws.common.modules
+    - amazon.aws.region.modules
 
 author:
     - Your Name (@yourGitHubHandle)
 '''
 
 EXAMPLES = r'''
-# Pass in a message
-- name: Test with a message
-  my_namespace.my_collection.my_test:
-    name: hello world
-
-# pass in a message and have changed true
-- name: Test with a message and changed output
-  my_namespace.my_collection.my_test:
-    name: hello world
-    new: true
+- name: Enabling Serial Console
+  amazon.aws.ec2_serial_console:
+    state: enabled
 
 # fail the module
 - name: Test failure of the module
-  my_namespace.my_collection.my_test:
-    name: fail me
+  amazon.aws.ec2_serial_console:
+    state: fail me
 '''
 
 RETURN = r'''
-# These are examples of possible return values, and in general should use other names for return values.
-original_message:
-    description: The original name param that was passed in.
+changed:
+    description: Whether the original status was changed or not
+    type: bool
+    returned: always
+    sample: true
+account_id:
+    description: The account id where the serial console change has taken effect.
     type: str
     returned: always
-    sample: 'hello world'
-message:
-    description: The output message that the test module generates.
+    sample: '123456789123'
+serial_console_status:
+    description: The current state of the seria console, enabled or disabled.
     type: str
     returned: always
-    sample: 'goodbye'
+    sample: 'enabled'
 '''
 
-# from ansible.module_utils.basic import AnsibleModule
+
 from ansible_collections.amazon.aws.plugins.module_utils.modules import AnsibleAWSModule
 try:
     import botocore
 except ImportError:
     pass  # handled by AnsibleAWSModule
 
-
 def change_serial_console():
-    # define available arguments/parameters a user can pass to the module
     module_args = dict(
-        state=dict(type='str', required=True, default="disabled", choices=["enabled", "disabled"]),
+        state=dict(type='str', required=True, choices=["enabled", "disabled"]),
     )
 
-    # seed the result dict in the object
-    # we primarily care about changed and state
-    # changed is if this module effectively modified the target
-    # state will include any data that you want your module to pass back
-    # for consumption, for example, in a subsequent task
     result = dict(
         changed=False,
         account_id='',
         serial_console_status=''
     )
 
-    # the AnsibleModule object will be our abstraction working with Ansible
-    # this includes instantiation, a couple of common attr would be the
-    # args/params passed to the execution, as well as if the module
-    # supports check mode
     module = AnsibleAWSModule(
         argument_spec=module_args,
         supports_check_mode=True
     )
+
+    ec2_client = module.client("ec2")
+    sts_client = module.client("sts")
 
     # if the user is working with this module in only check mode we do not
     # want to make any changes to the environment, just return the current
@@ -109,24 +91,25 @@ def change_serial_console():
     if module.check_mode:
         module.exit_json(**result)
 
-    # manipulate or modify the state as needed (this is going to be the
-    # part where your module will do what it needs to do)
-    result['original_message'] = module.params['name']
-    result['message'] = 'goodbye'
+    
+    try: 
+        caller_identity = sts_client.get_caller_identity()
+        current_serial_console_access = ec2_client.get_serial_console_access_status()
 
-    # use whatever logic you need to determine whether or not this module
-    # made any modifications to your target
-    if module.params['new']:
-        result['changed'] = True
+        # Do not modify if the current environment state is the same as that of supplied state
+        serial_console_status = "enabled" if current_serial_console_access["SerialConsoleAccessEnabled"] else "disabled"
+        if (serial_console_status != module.params['state']):
+            if (module.params['state'] == 'enabled'):
+                current_serial_console_access = ec2_client.enable_serial_console_access()
+            elif (module.params['state'] == 'disabled'):
+                current_serial_console_access = ec2_client.disable_serial_console_access()
+            result['changed']=True
+    except (botocore.exceptions.BotoCoreError, botocore.exceptions.ClientError) as e:
+        module.fail_json_aws("e")
+    
+    result['account_id'] = caller_identity["Account"]
+    result['serial_console_status'] = "enabled" if current_serial_console_access["SerialConsoleAccessEnabled"] else "disabled"
 
-    # during the execution of the module, if there is an exception or a
-    # conditional state that effectively causes a failure, run
-    # AnsibleModule.fail_json() to pass in the message and the result
-    if module.params['name'] == 'fail me':
-        module.fail_json(msg='You requested this to fail', **result)
-
-    # in the event of a successful module execution, you will want to
-    # simple AnsibleModule.exit_json(), passing the key/value results
     module.exit_json(**result)
 
 
