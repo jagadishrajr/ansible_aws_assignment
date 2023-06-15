@@ -32,12 +32,12 @@ author:
 
 EXAMPLES = r'''
 - name: Enabling Serial Console
-  amazon.aws.ec2_serial_console:
+  ec2_serial_console:
     state: enabled
 
 # fail the module
 - name: Test failure of the module
-  amazon.aws.ec2_serial_console:
+  ec2_serial_console:
     state: fail me
 '''
 

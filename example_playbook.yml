@@ -5,7 +5,7 @@
   tasks:
     - name: Enabling Serial Console
       ec2_serial_console:
-        state: disabled
+        state: enabled
       register: r
     - name: Debugging
       debug:
