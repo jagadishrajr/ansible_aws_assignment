@@ -27,7 +27,7 @@ extends_documentation_fragment:
     - amazon.aws.region.modules
 
 author:
-    - Your Name (@yourGitHubHandle)
+    - Jagadish Raj (@jagadishrajr)
 '''
 
 EXAMPLES = r'''

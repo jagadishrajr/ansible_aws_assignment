@@ -1,0 +1,12 @@
+---
+- name: Test Playbook
+  hosts: localhost
+  connection: local
+  tasks:
+    - name: Enabling Serial Console
+      ec2_serial_console:
+        state: disabled
+      register: r
+    - name: Debugging
+      debug:
+        msg: "The state of the serial console for account {{ r.account_id }} is {{ r.serial_console_status }}"
